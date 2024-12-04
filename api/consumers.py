@@ -2,8 +2,8 @@ import json
 from asgiref.sync import async_to_sync
 from channels.generic.websocket import WebsocketConsumer
 from .models import User, ChatRoom, Message
-from django.db.models import Q
-from .serializers import SearchSerializer, MessageSerializer
+from django.db.models import Q, Max
+from .serializers import SearchSerializer, MessageSerializer, ChatsSerializer
 
 class ChatConsumer(WebsocketConsumer):
 
@@ -46,6 +46,9 @@ class ChatConsumer(WebsocketConsumer):
         elif data_source == 'get_chat':
             
             self.receive_chat(data)
+        if data_source == 'index':
+            print('inside index')
+            self.receive_all_chats()
 
     def receive_search(self, data):
         query = data.get('query')
@@ -112,7 +115,19 @@ class ChatConsumer(WebsocketConsumer):
 
         
         self.send_group(data['user1'], 'get_chat', response)
+    
+    def receive_all_chats(self):
+        user_id = User.objects.get(username=self.username).id
+        chats = ChatRoom.objects.filter(participants=user_id)
         
+        serialized = ChatsSerializer(chats, many=True, context={'user_name': self.username})
+        response = {
+            'type': 'all_chats',
+            'data': serialized.data
+        }
+        
+        self.send_group(self.username, 'get_all_chats', response)
+
 
     # def chat_message(self, data):
     #     response = {

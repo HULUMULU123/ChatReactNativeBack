@@ -23,6 +23,8 @@ class ChatRoom(models.Model):
 
     name = models.CharField(max_length=35, blank=True, null=True)
 
+    group = models.BooleanField(default=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -63,4 +65,5 @@ class Message(models.Model):
 
     def __str__(self):
         return f"Message {self.id} from {self.sender.username}"
+    
 # Create your models here.
