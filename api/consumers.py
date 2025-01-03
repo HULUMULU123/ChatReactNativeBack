@@ -99,6 +99,7 @@ class ChatConsumer(WebsocketConsumer):
             'source': 'chat',
             'content': message_text,
             'file': file_url,
+            'created_at': str(message.created_at),
             'from': data['from'],
             'to': data['to'],
             'sender': self.channel_name
@@ -117,7 +118,10 @@ class ChatConsumer(WebsocketConsumer):
         chat = ChatRoom.get_private_chat(data['user1'], data['user2'])
         chat_keys = ChatKey.get_chat_keys(data['user1'], data['user2'])
         print(chat_keys)
+        messages = Message.objects.filter(room=chat, is_read=False).exclude(sender__username=self.username)
+        messages.update(is_read=True)
         messages = Message.objects.filter(room=chat)
+        
 
         serialized = MessageSerializer(messages, many=True)
         
@@ -137,10 +141,14 @@ class ChatConsumer(WebsocketConsumer):
         self.send_group(data['user1'], 'get_chat', response)
     
     def receive_all_chats(self):
-        user_id = User.objects.get(username=self.username).id
+        user =  User.objects.get(username=self.username)
+        user_id = user.id
+        user_online = user.online
+        
         chats = ChatRoom.objects.filter(participants=user_id)
         chats = chats.annotate(last_message_date=Max('messages__created_at')).order_by('-last_message_date')
-        serialized = ChatsSerializer(chats, many=True, context={'user_name': self.username})
+        serialized = ChatsSerializer(chats, many=True, context={'user_name': self.username, "user_online": user_online })
+        print(serialized.data, 'online')
         response = {
             'type': 'all_chats',
             'data': serialized.data

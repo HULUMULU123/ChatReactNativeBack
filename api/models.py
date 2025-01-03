@@ -20,6 +20,7 @@ class User(AbstractUser):
     )
     public_key = models.TextField()
     private_key = models.TextField()
+    online = models.BooleanField(default=False)
 
 
 class ChatRoom(models.Model):

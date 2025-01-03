@@ -37,7 +37,7 @@ class SignView(APIView):
         print(User.objects.get(username=username).password, 'testing')
         if not user:
             return Response(status=401)
-        
+        User.objects.filter(username=username).update(online=True)
         user_data = get_auth_for_user(user)
         print(user_data)
         return Response(user_data)

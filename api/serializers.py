@@ -50,6 +50,7 @@ class UserSerializer(serializers.ModelSerializer):
             'username',
             'thumbnail',
             'private_key',
+            'online',
         ]
 
 class SearchSerializer(UserSerializer):
@@ -62,7 +63,7 @@ class SearchSerializer(UserSerializer):
             'status'
         ]
     def get_status(self, obj):
-        return 'no conn'
+        return obj.online
     
 class MessageSerializer(serializers.ModelSerializer):
     username = serializers.SerializerMethodField()
@@ -76,11 +77,16 @@ class MessageSerializer(serializers.ModelSerializer):
 class ChatsSerializer(serializers.ModelSerializer):
     chat_name = serializers.SerializerMethodField()
     last_message = serializers.SerializerMethodField()
+    unreaded_messages = serializers.SerializerMethodField()
+    online = serializers.SerializerMethodField()
     class Meta:
         model = ChatRoom
         fields = ['chat_name',
-                    'last_message']
+                    'last_message',
+                    'unreaded_messages',
+                    'online']
     
+
     def get_chat_name(self, obj:ChatRoom):
         if obj.participants.count() == 2 and obj.name is None:
             current_user = self.context.get('user_name')
@@ -101,3 +107,12 @@ class ChatsSerializer(serializers.ModelSerializer):
             'from': last_message.sender.username if last_message else None,
         }
         return message
+    
+    def get_unreaded_messages(self, obj:ChatRoom):
+        current_user = self.context.get('user_name')
+        messages_count = Message.objects.filter(room=obj, is_read=False).exclude(sender__username=current_user).count()
+        return messages_count
+    
+    def get_online(self, obj):
+        online = self.context.get('user_online')
+        return online
