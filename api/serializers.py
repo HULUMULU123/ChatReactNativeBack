@@ -7,21 +7,36 @@ class SignUpSerializer(serializers.ModelSerializer):
         fields = [
             'username',
             'password',
+            'public_key',
+            'private_key',
         ]
         extra_kwargs = {
             'password': {
                 # Ensures that when serializing, this field will be xcluded
                 'write_only': True
+            },
+            'private_key': {
+                'write_only': True
+            },
+            'public_key': {
+                'write_only': True
             }
         }
     def create(self, validated_data):
+        print(validated_data)
         # Clean all values, set as lowercase
         username = validated_data['username'].lower()
         # Create a new user
+        private_key = validated_data['private_key']
+        public_key = validated_data['public_key']
+        print(public_key)
         user = User(
-            username=username
+            username=username,
+            private_key=private_key,
+            public_key=public_key
         )
         password = validated_data['password']
+        
         user.set_password(password)
         user.save()
         return user
@@ -33,7 +48,8 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'username',
-            'thumbnail'
+            'thumbnail',
+            'private_key',
         ]
 
 class SearchSerializer(UserSerializer):

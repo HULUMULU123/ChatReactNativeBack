@@ -1,10 +1,12 @@
 import json
 from asgiref.sync import async_to_sync
 from channels.generic.websocket import WebsocketConsumer
-from .models import User, ChatRoom, Message
+from .models import User, ChatRoom, Message, ChatKey
 from django.db.models import Q, Max
 from .serializers import SearchSerializer, MessageSerializer, ChatsSerializer
 
+import base64
+from django.core.files.base import ContentFile
 class ChatConsumer(WebsocketConsumer):
 
     def connect(self):
@@ -75,42 +77,60 @@ class ChatConsumer(WebsocketConsumer):
 
     def receive_message(self, data):
         print(data)
-        response = {
-            
-            'source': 'chat',
-            'msg': data['msg'],
-            'from': data['from'],
-            'to': data['to'],
-            'sender': self.channel_name
-        }
+        
         
 
         
         chat = ChatRoom.get_private_chat(data['from'], data['to'])
         print(chat, 'chek')
-        message = Message.objects.create(room=chat, sender=User.objects.get(username=data['from']), content=data['msg'])
-        # message.room=ChatRoom.objects.get(id=chat.id)
-        # message.sender = User.objects.get(username=data['from'])
-        # message.content = data['msg']
+        
+        message_text = data['msg']['text']
+        file_url = data['msg'].get('file')
+        print(file_url)
+        print(data)
+        if len(file_url) > 0: 
+            message = Message.objects.create(room=chat, sender=User.objects.get(username=data['from']), content=message_text, file=file_url)
+        else:
+            message = Message.objects.create(room=chat, sender=User.objects.get(username=data['from']), content=message_text, file='')
         message.save()
         print('inside msg')
-        res = {
-            'type' : 'send_message',
-            'data': response
-
+        response = {
+            
+            'source': 'chat',
+            'content': message_text,
+            'file': file_url,
+            'from': data['from'],
+            'to': data['to'],
+            'sender': self.channel_name
         }
+
+        # -------------------------------------------------------------------------
+        # res = {
+        #     'type' : 'send_message',
+        #     'data': response
+
+        # }
         # async_to_sync(self.channel_layer.group_send)(data['to'], res)
         self.send_group(data['to'], 'chat_message', response)
 
     def receive_chat(self, data):
         chat = ChatRoom.get_private_chat(data['user1'], data['user2'])
+        chat_keys = ChatKey.get_chat_keys(data['user1'], data['user2'])
+        print(chat_keys)
         messages = Message.objects.filter(room=chat)
 
         serialized = MessageSerializer(messages, many=True)
+        
+        if self.username == chat_keys.username1:
+            user_chat_key = chat_keys.user_key_1
+        else:
+            user_chat_key = chat_keys.user_key_2
+        
         print(serialized.data)
         response = {
             'type': 'get_chat',
-            'data': serialized.data
+            'data': serialized.data,
+            'chat_key': user_chat_key,
         }
 
         
@@ -119,7 +139,7 @@ class ChatConsumer(WebsocketConsumer):
     def receive_all_chats(self):
         user_id = User.objects.get(username=self.username).id
         chats = ChatRoom.objects.filter(participants=user_id)
-        
+        chats = chats.annotate(last_message_date=Max('messages__created_at')).order_by('-last_message_date')
         serialized = ChatsSerializer(chats, many=True, context={'user_name': self.username})
         response = {
             'type': 'all_chats',
