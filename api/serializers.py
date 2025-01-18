@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Message, ChatRoom
+from .models import User, Message, ChatRoom, ChatKey
 
 class SignUpSerializer(serializers.ModelSerializer):
     class Meta:
@@ -7,10 +7,20 @@ class SignUpSerializer(serializers.ModelSerializer):
         fields = [
             'username',
             'password',
+            'first_name',
+            'last_name',
             'public_key',
             'private_key',
         ]
         extra_kwargs = {
+            'last_name': {
+                # Ensures that when serializing, this field will be xcluded
+                'write_only': True
+            },
+            'first_name': {
+                # Ensures that when serializing, this field will be xcluded
+                'write_only': True
+            },
             'password': {
                 # Ensures that when serializing, this field will be xcluded
                 'write_only': True
@@ -23,9 +33,12 @@ class SignUpSerializer(serializers.ModelSerializer):
             }
         }
     def create(self, validated_data):
-        print(validated_data)
+        
+        print(validated_data, 'lookondata')
         # Clean all values, set as lowercase
         username = validated_data['username'].lower()
+        last_name = validated_data['last_name'].lower()
+        first_name = validated_data['first_name'].lower()
         # Create a new user
         private_key = validated_data['private_key']
         public_key = validated_data['public_key']
@@ -33,7 +46,9 @@ class SignUpSerializer(serializers.ModelSerializer):
         user = User(
             username=username,
             private_key=private_key,
-            public_key=public_key
+            public_key=public_key,
+            first_name=first_name,
+            last_name=last_name,
         )
         password = validated_data['password']
         
@@ -48,11 +63,17 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'username',
+            'first_name',
+            'last_name',
             'thumbnail',
             'private_key',
             'online',
         ]
 
+class AvatarSerializer(UserSerializer):
+    class Meta: 
+        model = User
+        fields = ['username','thumbnail']
 class SearchSerializer(UserSerializer):
     status = serializers.SerializerMethodField()
 
@@ -60,7 +81,8 @@ class SearchSerializer(UserSerializer):
         model = User
         fields = [
             'username',
-            'status'
+            'status',
+            'thumbnail'
         ]
     def get_status(self, obj):
         return obj.online
@@ -79,12 +101,16 @@ class ChatsSerializer(serializers.ModelSerializer):
     last_message = serializers.SerializerMethodField()
     unreaded_messages = serializers.SerializerMethodField()
     online = serializers.SerializerMethodField()
+    avatar = serializers.SerializerMethodField()
+    key = serializers.SerializerMethodField()
     class Meta:
         model = ChatRoom
         fields = ['chat_name',
                     'last_message',
                     'unreaded_messages',
-                    'online']
+                    'online',
+                    'avatar',
+                    'key']
     
 
     def get_chat_name(self, obj:ChatRoom):
@@ -116,3 +142,24 @@ class ChatsSerializer(serializers.ModelSerializer):
     def get_online(self, obj):
         online = self.context.get('user_online')
         return online
+    def get_avatar(self, obj:ChatRoom):
+        participants = obj.participants
+        current_username = self.context.get('user_name')
+        current_user = User.objects.get(username=current_username)
+        if participants.count() == 2:
+            second_participant = participants.exclude(id=current_user.id).first()
+        avatar = second_participant.thumbnail.url
+        return avatar
+    
+    def get_key(self, obj):
+        participants = obj.participants
+        current_username = self.context.get('user_name')
+        current_user = User.objects.get(username=current_username)
+        if participants.count() == 2:
+            second_participant = participants.exclude(id=current_user.id).first()
+        chat_keys = ChatKey.get_chat_keys(current_user, second_participant)
+        if current_username == chat_keys.username1:
+            user_chat_key = chat_keys.user_key_1
+        else:
+            user_chat_key = chat_keys.user_key_2
+        return user_chat_key

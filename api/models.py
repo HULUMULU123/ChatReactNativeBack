@@ -5,12 +5,54 @@ import base64
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
+
+import random
+from PIL import Image, ImageDraw, ImageFont
+import os
+from io import BytesIO
+from django.core.files.base import ContentFile
 def upload_thumbnail(instance, filename):
     path = f'thumbnails/{instance.username}'
     extension = filename.split('.')[-1]
     if extension:
         path += '.'+extension
     return path
+
+def generate_avatar(first_name, last_name, size=(200, 200), font_size=80):
+    # Создаем рандомный цвет фона
+    background_color = tuple(random.randint(0, 255) for _ in range(3))  # RGB
+    text_color = (255, 255, 255)  # Белый текст
+
+    # Берем первые буквы имени и фамилии
+    initials = f"{first_name[0].upper()}{last_name[0].upper()}"
+
+    # Создаем изображение
+    img = Image.new("RGB", size, background_color)
+    draw = ImageDraw.Draw(img)
+
+    # Определяем шрифт (укажите путь к ttf-шрифту)
+    font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"  # Linux
+    if not os.path.exists(font_path):
+        font_path = "C:\\Windows\\Fonts\\arial.ttf"  # Windows (проверьте наличие файла)
+
+    font = ImageFont.truetype(font_path, font_size)
+
+    # Рассчитываем координаты для центрирования текста
+    bbox = draw.textbbox((0, 0), initials, font=font)  # Получаем координаты текста
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+
+    # Центрирование текста (добавляем коррекцию вертикального смещения)
+    text_x = (size[0] - text_width) // 2
+    text_y = (size[1] - text_height) // 2 - bbox[1] // 2
+
+    # Рисуем текст
+    draw.text((text_x, text_y), initials, fill=text_color, font=font)
+
+    # Сохраняем изображение в память
+    buffer = BytesIO()
+    img.save(buffer, format="PNG")
+    return ContentFile(buffer.getvalue(), name=f"{first_name}_{last_name}_avatar.png")
 
 class User(AbstractUser):
     thumbnail = models.ImageField(
@@ -21,6 +63,12 @@ class User(AbstractUser):
     public_key = models.TextField()
     private_key = models.TextField()
     online = models.BooleanField(default=False)
+
+    def save(self, *args, **kwargs):
+        # Если аватарки нет, создаем ее
+        if not self.thumbnail:
+            self.thumbnail = generate_avatar(self.first_name, self.last_name)
+        super().save(*args, **kwargs)
 
 
 class ChatRoom(models.Model):
@@ -43,6 +91,7 @@ class ChatRoom(models.Model):
 
     @staticmethod
     def get_private_chat(username1, username2):
+        print(username1, username2)
         user1 = User.objects.get(username=username1)
         user2 = User.objects.get(username=username2)
         '''Get or create room form two users'''

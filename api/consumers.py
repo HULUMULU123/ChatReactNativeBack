@@ -3,7 +3,7 @@ from asgiref.sync import async_to_sync
 from channels.generic.websocket import WebsocketConsumer
 from .models import User, ChatRoom, Message, ChatKey
 from django.db.models import Q, Max
-from .serializers import SearchSerializer, MessageSerializer, ChatsSerializer
+from .serializers import SearchSerializer, MessageSerializer, ChatsSerializer, AvatarSerializer
 
 import base64
 from django.core.files.base import ContentFile
@@ -51,6 +51,16 @@ class ChatConsumer(WebsocketConsumer):
         if data_source == 'index':
             print('inside index')
             self.receive_all_chats()
+        if data_source == 'avatar':
+            print('avatar get')
+            username = data.get('username')
+            self.receive_avatar(username)
+
+    def receive_avatar(self, username):
+        user = User.objects.get(username=username)
+        serialized = AvatarSerializer(user)
+        print('avatarser', serialized.data)
+        self.send_group(self.username, 'get_avatar', serialized.data)
 
     def receive_search(self, data):
         query = data.get('query')
@@ -146,8 +156,10 @@ class ChatConsumer(WebsocketConsumer):
         user_online = user.online
         
         chats = ChatRoom.objects.filter(participants=user_id)
+        
+       
         chats = chats.annotate(last_message_date=Max('messages__created_at')).order_by('-last_message_date')
-        serialized = ChatsSerializer(chats, many=True, context={'user_name': self.username, "user_online": user_online })
+        serialized = ChatsSerializer(chats, many=True, context={'user_name': self.username, "user_online": user_online, 'avatar': user.thumbnail.url })
         print(serialized.data, 'online')
         response = {
             'type': 'all_chats',

@@ -9,6 +9,11 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .serializers import UserSerializer,SignUpSerializer
 from .models import User
 
+from django.http import JsonResponse
+from io import BytesIO
+from django.core.files.base import ContentFile
+import base64
+
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 def get_auth_for_user(user):
@@ -21,6 +26,58 @@ def get_auth_for_user(user):
             'refresh': str(tokens)
         }
     }
+
+class UpdateView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+
+        # username = request.data.get('username')
+        base64_image = request.data.get('avatar')
+        type_param = request.data.get('type')
+        info = request.data.get('info')
+        username = request.data.get('username')
+
+        if type_param == "avatar":
+            if not base64_image:
+                return JsonResponse({'error': 'Нет изображения'}, status=400)
+
+            try:
+                # Разделяем строку Base64 от префикса, если он есть
+            
+
+                # Декодируем строку Base64
+                image_data = base64.b64decode(base64_image)
+                
+                image_file = BytesIO(image_data)
+                
+                # Создаем ContentFile для хранения изображения
+                content_file = ContentFile(image_data, name=f"{username}_avatar.jpg")
+                print(content_file)
+                # Сохраняем изображение в поле модели
+                user_profile = User.objects.get(username=username)
+                user_profile.thumbnail.save(content_file.name, content_file, save=True)
+
+                return JsonResponse({'message': 'Фото успешно загружено'})
+            
+            except Exception as e:
+                return JsonResponse({'error': f'Ошибка при обработке изображения: {str(e)}'}, status=400)
+        if info:
+            if type_param == 'username':
+                users = User.objects.filter(username=info)
+                if len(users) == 0:
+                    User.objects.filter(username=username).update(username=info)
+                    return JsonResponse({'message': 'Success'})
+                else:
+                    return JsonResponse({'error': 'User already exist012'}, status=400)
+            if type_param == 'name':
+                User.objects.filter(username=username).update(first_name=info)
+                return JsonResponse({'message': 'Success'})
+            if type_param == 'surname':
+                User.objects.filter(username=username).update(last_name=info)
+                return JsonResponse({'message': 'Success'})
+        else:
+            return JsonResponse({'error': '(('}, status=400)
 
 
 class SignView(APIView):
@@ -65,9 +122,9 @@ class SignUpView(APIView):
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
         )
-        print('test-key', private_pem.decode('utf-8'), public_pem.decode('utf-8'), request.data)
+        
         request.data.update([('private_key', private_pem.decode('utf-8')), ('public_key', public_pem.decode('utf-8'))])
-        print(request.data)
+        print(request.data, 'DATATOSER')
         new_user = SignUpSerializer(data=request.data)
         new_user.is_valid(raise_exception=True)
         user = new_user.save()
