@@ -157,6 +157,12 @@ class Message(models.Model):
 
     sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sender')
     
+    reply = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
     content = models.TextField()
     file = models.TextField(default='')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -167,5 +173,28 @@ class Message(models.Model):
 
     def __str__(self):
         return f"Message {self.id} from {self.sender.username}"
-    
+
+class Reaction(models.Model):
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='reactions'
+    )
+    message = models.ForeignKey(
+        Message, on_delete=models.CASCADE,
+        related_name='reactions'
+    )
+    REACTION_CHOICES = [
+        ("❤️", "Heart"),
+        ("👍", "Thumbs Up"),
+        ("💪", "strong"),
+        ("👎", "Thumbs Down"),
+        ("😭", "Cry"),
+    ]
+    emoji = models.CharField(max_length=2, choices=REACTION_CHOICES)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        unique_together = ("user", "message")  # 1 пользователь — 1 реакция на сообщение
+
+    def __str__(self):
+        return f"{self.user} reacted {self.emoji} to Message {self.message.id}"
 # Create your models here.

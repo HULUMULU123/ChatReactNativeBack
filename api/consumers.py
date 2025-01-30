@@ -43,7 +43,7 @@ class ChatConsumer(WebsocketConsumer):
         if data_source == 'search':
             self.receive_search(data)
         if data_source == 'send_message':
-            print('insede origin msg')
+            print('send_MSSSG', data)
             self.receive_message(data)
         elif data_source == 'get_chat':
             
@@ -96,10 +96,16 @@ class ChatConsumer(WebsocketConsumer):
         
         message_text = data['msg']['text']
         file_url = data['msg'].get('file')
+        reply = data['msg'].get('reply')
+        if reply: 
+            messaged = Message.objects.get(id=reply)
+        else: messaged =None
         print(file_url)
         print(data)
         if len(file_url) > 0: 
             message = Message.objects.create(room=chat, sender=User.objects.get(username=data['from']), content=message_text, file=file_url)
+        elif messaged:
+            message = Message.objects.create(room=chat, sender=User.objects.get(username=data['from']), content=message_text, file='', reply=messaged)
         else:
             message = Message.objects.create(room=chat, sender=User.objects.get(username=data['from']), content=message_text, file='')
         message.save()
@@ -109,6 +115,7 @@ class ChatConsumer(WebsocketConsumer):
             'source': 'chat',
             'content': message_text,
             'file': file_url,
+            'reply': reply,
             'created_at': str(message.created_at),
             'from': data['from'],
             'to': data['to'],
