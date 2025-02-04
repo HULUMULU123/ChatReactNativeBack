@@ -18,7 +18,13 @@ def upload_thumbnail(instance, filename):
         path += '.'+extension
     return path
 
-def generate_avatar(first_name, last_name, size=(200, 200), font_size=80):
+def upload_group_thumbnail(instance, filename):
+    path = f'thumbnails/group/{instance.name}'
+    extension = filename.split('.')[-1]
+    if extension:
+        path += '.'+extension
+    return path
+def generate_avatar(first_name='Admin', last_name='Admin', size=(200, 200), font_size=80):
     # Создаем рандомный цвет фона
     background_color = tuple(random.randint(0, 255) for _ in range(3))  # RGB
     text_color = (255, 255, 255)  # Белый текст
@@ -53,6 +59,44 @@ def generate_avatar(first_name, last_name, size=(200, 200), font_size=80):
     buffer = BytesIO()
     img.save(buffer, format="PNG")
     return ContentFile(buffer.getvalue(), name=f"{first_name}_{last_name}_avatar.png")
+
+
+def generate_group_avatar(name='Group', size=(200, 200), font_size=80):
+    # Создаем рандомный цвет фона
+    background_color = tuple(random.randint(0, 255) for _ in range(3))  # RGB
+    text_color = (255, 255, 255)  # Белый текст
+
+    # Берем первые буквы имени и фамилии
+    initials = f"{name[0].upper()}"
+
+    # Создаем изображение
+    img = Image.new("RGB", size, background_color)
+    draw = ImageDraw.Draw(img)
+
+    # Определяем шрифт (укажите путь к ttf-шрифту)
+    font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"  # Linux
+    if not os.path.exists(font_path):
+        font_path = "C:\\Windows\\Fonts\\arial.ttf"  # Windows (проверьте наличие файла)
+
+    font = ImageFont.truetype(font_path, font_size)
+
+    # Рассчитываем координаты для центрирования текста
+    bbox = draw.textbbox((0, 0), initials, font=font)  # Получаем координаты текста
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+
+    # Центрирование текста (добавляем коррекцию вертикального смещения)
+    text_x = (size[0] - text_width) // 2
+    text_y = (size[1] - text_height) // 2 - bbox[1] // 2
+
+    # Рисуем текст
+    draw.text((text_x, text_y), initials, fill=text_color, font=font)
+
+    # Сохраняем изображение в память
+    buffer = BytesIO()
+    img.save(buffer, format="PNG")
+    return ContentFile(buffer.getvalue(), name=f"{name}_group_avatar.png")
+
 
 class User(AbstractUser):
     thumbnail = models.ImageField(
@@ -198,3 +242,70 @@ class Reaction(models.Model):
     def __str__(self):
         return f"{self.user} reacted {self.emoji} to Message {self.message.id}"
 # Create your models here.
+
+
+class GroupChat(models.Model):
+    
+
+    participants = models.ManyToManyField(User, related_name='group_chat')
+
+    name = models.CharField(max_length=35, blank=True, null=True)
+
+    thumbnail = models.ImageField(
+        upload_to=upload_group_thumbnail,
+        null=True,
+        blank=True
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+       
+        return self.name or f"Group {self.id}"
+
+    @staticmethod
+    def get_private_chat(username, group_id):
+        print(username, group_id)
+        user = User.objects.get(username=username)
+        
+        '''Get or create room form two users'''
+        group = GroupChat.objects.filter(
+            id=group_id
+        ).filter(participants=user).first()
+        
+        if not group:
+            group = GroupChat.objects.create()
+            group.participants.add(user)
+
+        return group
+    
+    def save(self, *args, **kwargs):
+        # Если аватарки нет, создаем ее
+        if not self.thumbnail:
+            self.thumbnail = generate_group_avatar(self.name)
+        super().save(*args, **kwargs)
+
+
+class GroupMessage(models.Model):
+
+    group = models.ForeignKey(GroupChat, on_delete=models.CASCADE, related_name='group_messages')
+
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='group_sender')
+    
+    reply = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+    content = models.TextField()
+    file = models.TextField(default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    is_read = models.BooleanField(default=False)
+
+    is_deleted = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Group Message {self.id} from {self.sender.username}"

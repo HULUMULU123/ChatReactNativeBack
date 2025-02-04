@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Message, ChatRoom, ChatKey, Reaction
+from .models import User, Message, ChatRoom, ChatKey, Reaction, GroupChat, GroupMessage
 
 class SignUpSerializer(serializers.ModelSerializer):
     class Meta:
@@ -74,6 +74,12 @@ class AvatarSerializer(UserSerializer):
     class Meta: 
         model = User
         fields = ['username','thumbnail']
+
+class GroupAvatarSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GroupChat
+        fields = ['name', 'thumbnail']
+
 class SearchSerializer(UserSerializer):
     status = serializers.SerializerMethodField()
 
@@ -175,3 +181,24 @@ class ChatsSerializer(serializers.ModelSerializer):
         else:
             user_chat_key = chat_keys.user_key_2
         return user_chat_key
+    
+class GroupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GroupChat
+        fields = '__all__'
+
+class GroupMessageSerializer(serializers.ModelSerializer):
+    sender_username = serializers.SerializerMethodField()
+    sender_thumbnail = serializers.SerializerMethodField()
+    class Meta:
+        model = GroupMessage
+        fields = '__all__'
+    
+    def get_sender_username(self, obj):
+        sender = obj.sender
+        print(sender.username, 'username_sender')
+        return sender.username
+    
+    def get_sender_thumbnail(self, obj):
+        sender_thumbnail = obj.sender.thumbnail.url
+        return sender_thumbnail

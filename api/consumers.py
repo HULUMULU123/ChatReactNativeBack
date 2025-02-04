@@ -1,9 +1,9 @@
 import json
 from asgiref.sync import async_to_sync
 from channels.generic.websocket import WebsocketConsumer
-from .models import User, ChatRoom, Message, ChatKey
+from .models import User, ChatRoom, Message, ChatKey, GroupChat, GroupMessage
 from django.db.models import Q, Max
-from .serializers import SearchSerializer, MessageSerializer, ChatsSerializer, AvatarSerializer
+from .serializers import SearchSerializer, MessageSerializer, ChatsSerializer, AvatarSerializer, GroupSerializer, GroupMessageSerializer,GroupAvatarSerializer
 
 import base64
 from django.core.files.base import ContentFile
@@ -59,6 +59,18 @@ class ChatConsumer(WebsocketConsumer):
             print('avatar get')
             username = data.get('username')
             self.receive_avatar(username)
+        if data_source == 'group_avatar':
+            name = str(data.get('name')).lower()
+            self.receive_group_avatar(name)
+        if data_source == 'all_groups':
+            self.receive_all_groups()
+        elif data_source == 'get_group':
+            self.recieve_group(data)
+        if data_source == 'send_group_message':
+            self.receive_group_message()
+        if data_source == 'create_group':
+            print('create_group', data)
+            self.receive_create_group(data)
 
     def receive_avatar(self, username):
         user = User.objects.get(username=username)
@@ -66,6 +78,12 @@ class ChatConsumer(WebsocketConsumer):
         print('avatarser', serialized.data)
         self.send_group(self.username, 'get_avatar', serialized.data)
 
+    def receive_group_avatar(self, name):
+        print(name)
+        group = GroupChat.objects.get(name=name)
+        serialized = GroupAvatarSerializer(group)
+        self.send_group(self.username, 'get_avatar', serialized.data)\
+        
     def receive_search(self, data):
         query = data.get('query')
 
@@ -135,6 +153,10 @@ class ChatConsumer(WebsocketConsumer):
         # async_to_sync(self.channel_layer.group_send)(data['to'], res)
         self.send_group(data['to'], 'chat_message', response)
 
+    def receive_group_message(self, data):
+        pass
+
+
     def receive_chat(self, data):
         chat = ChatRoom.get_private_chat(data['user1'], data['user2'])
         chat_keys = ChatKey.get_chat_keys(data['user1'], data['user2'])
@@ -161,6 +183,42 @@ class ChatConsumer(WebsocketConsumer):
         
         self.send_group(data['user1'], 'get_chat', response)
     
+    def receive_create_group(self, data):
+        group_name = data['group_name'].lower()
+        group = GroupChat.objects.create(name=group_name)
+        user = User.objects.get(username=self.username)
+        group.participants.add(user)
+        for username in data['members']:
+            user = User.objects.get(username=username)
+            group.participants.add(user)
+        group.save()
+        user = User.objects.get(username=self.username)
+        user_id = user.id
+
+        groups = GroupChat.objects.filter(participants=user_id)
+
+        serialized = GroupSerializer(groups, many=True, context={'user_name': self.username})
+        response = {
+            'type': 'all_groups',
+            'data': serialized.data
+        }
+
+        self.send_group(self.username, 'get_all_groups', response)
+        
+
+    def recieve_group(self, data):
+        print(data, 'kek')
+        group = GroupChat.objects.get(name=data['name'])
+        messages = GroupMessage.objects.filter(group=group)
+        serialized = GroupMessageSerializer(messages, many=True)
+
+        response = {
+            'type': 'get_group',
+            'data': serialized.data
+        }
+
+        self.send_group(self.username, 'get_group', response)
+
     def receive_all_chats(self):
         user =  User.objects.get(username=self.username)
         user_id = user.id
@@ -179,6 +237,19 @@ class ChatConsumer(WebsocketConsumer):
         
         self.send_group(self.username, 'get_all_chats', response)
 
+    def receive_all_groups (self):
+        user = User.objects.get(username=self.username)
+        user_id = user.id
+
+        groups = GroupChat.objects.filter(participants=user_id)
+
+        serialized = GroupSerializer(groups, many=True, context={'user_name': self.username})
+        response = {
+            'type': 'all_groups',
+            'data': serialized.data
+        }
+
+        self.send_group(self.username, 'get_all_groups', response)
 
     # def chat_message(self, data):
     #     response = {
